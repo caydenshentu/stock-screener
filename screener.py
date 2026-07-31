@@ -19,6 +19,10 @@ from typing import Optional
 
 import yfinance as yf
 import pandas as pd
+import logging
+
+# Quiet yfinance's noisy warnings (false 'delisted' reports, etc.)
+logging.getLogger("yfinance").setLevel(logging.ERROR)
 
 pd.set_option("display.max_rows", 200)
 pd.set_option("display.width", 260)
@@ -120,10 +124,14 @@ def fetch_snp500() -> list[str]:
 
 # ── Core screening ──────────────────────────────────────────────────────
 def screen(tickers: list[str], filters: Filters) -> pd.DataFrame:
-    # Step 1: Batch download price history (most reliable data source)
+    # Work around yfinance caching bugs
+    yf.set_tz_cache_location("/tmp/yfinance-tz-cache")
+
+    # Step 1: Batch download price history
     log(f"Downloading prices for {len(tickers)} tickers...")
     prices = yf.download(
-        tickers, period="5d", auto_adjust=True, progress=False, threads=True
+        tickers, period="5d", auto_adjust=True, repair=True,
+        progress=False, threads=True,
     )
 
     # Step 2: Fetch fundamentals one ticker at a time (rate-limited)
