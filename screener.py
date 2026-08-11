@@ -146,13 +146,26 @@ def screen(tickers: list[str], filters: Filters) -> pd.DataFrame:
             log(f"Progress: {i+1}/{total}")
 
         try:
-            # Get last 2 closes for change%
-            close = prices["Close"][t] if isinstance(prices["Close"], pd.DataFrame) else prices["Close"]
-            close_vals = close.dropna().tail(2).values
+            # ── Price data ──
+            # Try batch-downloaded data first; fall back to a per-ticker
+            # fetch if the batch silently dropped this ticker.
+            close_vals = None
+            try:
+                close = prices["Close"][t] if isinstance(prices["Close"], pd.DataFrame) else prices["Close"]
+                vals = close.dropna().tail(2).values
+                if len(vals) >= 2:
+                    close_vals = vals
+            except (KeyError, TypeError):
+                pass
 
-            if len(close_vals) < 2:
-                errors += 1
-                continue
+            if close_vals is None:
+                # Fallback: fetch this ticker's history directly
+                h = yf.Ticker(t).history(period="5d", auto_adjust=True)
+                vals = h["Close"].dropna().tail(2).values
+                if len(vals) < 2:
+                    errors += 1
+                    continue
+                close_vals = vals
 
             prev_close, latest_close = close_vals[0], close_vals[-1]
             change_pct = ((latest_close - prev_close) / prev_close) * 100
